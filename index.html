@@ -750,15 +750,15 @@
                     if (req.status === 'Pending') {
                         html += `
                             <td class="px-6 py-4 text-right space-x-2 whitespace-nowrap">
-                                <button onclick="openDetailsModal(${req.id})" class="text-sm bg-blue-50 text-blue-700 hover:bg-blue-100 px-2 py-1 rounded border border-blue-200 transition" title="Review & Process"><i class="fa-solid fa-pen-to-square"></i></button>
-                                <button onclick="updateStatus(${req.id}, 'Rejected')" class="text-sm bg-red-50 text-red-700 hover:bg-red-100 px-2 py-1 rounded border border-red-200 transition" title="Reject"><i class="fa-solid fa-xmark"></i></button>
-                                <button onclick="updateStatus(${req.id}, 'Canceled')" class="text-sm bg-gray-50 text-gray-700 hover:bg-gray-200 px-2 py-1 rounded border border-gray-300 transition" title="Cancel"><i class="fa-solid fa-ban"></i></button>
+                                <button onclick="openDetailsModal('${req.id}')" class="text-sm bg-blue-50 text-blue-700 hover:bg-blue-100 px-2 py-1 rounded border border-blue-200 transition" title="Review & Process"><i class="fa-solid fa-pen-to-square"></i></button>
+                                <button onclick="updateStatus('${req.id}', 'Rejected')" class="text-sm bg-red-50 text-red-700 hover:bg-red-100 px-2 py-1 rounded border border-red-200 transition" title="Reject"><i class="fa-solid fa-xmark"></i></button>
+                                <button onclick="updateStatus('${req.id}', 'Canceled')" class="text-sm bg-gray-50 text-gray-700 hover:bg-gray-200 px-2 py-1 rounded border border-gray-300 transition" title="Cancel"><i class="fa-solid fa-ban"></i></button>
                             </td>
                         `;
                     } else {
                         html += `<td class="px-6 py-4 text-right space-x-2 whitespace-nowrap">
-                                    <button onclick="openDetailsModal(${req.id})" class="text-sm bg-gray-50 text-gray-700 hover:bg-gray-200 px-2 py-1 rounded border border-gray-300 transition" title="View Details"><i class="fa-solid fa-eye"></i></button>
-                                    <button onclick="updateStatus(${req.id}, 'Pending')" class="text-xs bg-blue-50 text-blue-600 hover:bg-blue-100 px-2 py-1 rounded border border-blue-200 transition" title="Revert to Pending"><i class="fa-solid fa-rotate-left"></i></button>
+                                    <button onclick="openDetailsModal('${req.id}')" class="text-sm bg-gray-50 text-gray-700 hover:bg-gray-200 px-2 py-1 rounded border border-gray-300 transition" title="View Details"><i class="fa-solid fa-eye"></i></button>
+                                    <button onclick="updateStatus('${req.id}', 'Pending')" class="text-xs bg-blue-50 text-blue-600 hover:bg-blue-100 px-2 py-1 rounded border border-blue-200 transition" title="Revert to Pending"><i class="fa-solid fa-rotate-left"></i></button>
                                  </td>`;
                     }
                 } else {
@@ -766,14 +766,14 @@
                     if (req.status === 'Pending') {
                          html += `
                             <td class="px-6 py-4 text-right whitespace-nowrap space-x-2">
-                                <button onclick="openDetailsModal(${req.id})" class="text-xs bg-blue-50 text-blue-600 hover:bg-blue-100 px-2 py-1 rounded border border-blue-200 transition" title="View Status"><i class="fa-solid fa-eye"></i> Status</button>
-                                <button onclick="updateStatus(${req.id}, 'Canceled')" class="text-xs bg-gray-50 text-gray-600 hover:bg-gray-100 px-2 py-1 rounded border border-gray-300 transition">Cancel</button>
+                                <button onclick="openDetailsModal('${req.id}')" class="text-xs bg-blue-50 text-blue-600 hover:bg-blue-100 px-2 py-1 rounded border border-blue-200 transition" title="View Status"><i class="fa-solid fa-eye"></i> Status</button>
+                                <button onclick="updateStatus('${req.id}', 'Canceled')" class="text-xs bg-gray-50 text-gray-600 hover:bg-gray-100 px-2 py-1 rounded border border-gray-300 transition">Cancel</button>
                             </td>
                         `;
                     } else {
                          html += `
                             <td class="px-6 py-4 text-right whitespace-nowrap">
-                                <button onclick="openDetailsModal(${req.id})" class="text-xs bg-blue-50 text-blue-600 hover:bg-blue-100 px-2 py-1 rounded border border-blue-200 transition" title="View Status"><i class="fa-solid fa-eye"></i> Status</button>
+                                <button onclick="openDetailsModal('${req.id}')" class="text-xs bg-blue-50 text-blue-600 hover:bg-blue-100 px-2 py-1 rounded border border-blue-200 transition" title="View Status"><i class="fa-solid fa-eye"></i> Status</button>
                             </td>
                         `;
                     }
@@ -922,8 +922,11 @@
         });
 
         window.openDetailsModal = function(id) {
-            const req = requests.find(r => r.id === id);
-            if (!req) return;
+            const req = requests.find(r => r.id == id);
+            if (!req) {
+                console.error("Request not found:", id);
+                return;
+            }
             
             currentDetailsReqId = id;
             currentTempAdminAttachUrl = req.adminAttachmentUrl || null;
@@ -1035,7 +1038,7 @@
         }
 
         document.getElementById('details-save-btn').addEventListener('click', () => {
-            const req = requests.find(r => r.id === currentDetailsReqId);
+            const req = requests.find(r => r.id == currentDetailsReqId);
             if (req) {
                 saveSignatures(req);
                 showModal('Saved', 'Progress has been saved. Request remains Pending.');
@@ -1043,7 +1046,7 @@
         });
 
         document.getElementById('details-approve-btn').addEventListener('click', () => {
-            const req = requests.find(r => r.id === currentDetailsReqId);
+            const req = requests.find(r => r.id == currentDetailsReqId);
             if (req) {
                 saveSignatures(req, 'Approved');
                 showModal('Approved', 'Request has been approved successfully.');
