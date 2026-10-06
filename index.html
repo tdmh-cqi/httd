@@ -1066,7 +1066,9 @@
                 window.open(url, '_blank');
             } else {
                 // Show local preview in modal
-                document.getElementById('image-modal-img').src = url;
+                const imgEl = document.getElementById('image-modal-img');
+                imgEl.src = url;
+                imgEl.classList.remove('hidden'); // UNHIDE THE IMAGE
                 imageModal.classList.remove('hidden');
             }
         };
@@ -1109,6 +1111,10 @@
                 ? `<div class="md:col-span-2 mt-4 pt-4 border-t border-gray-200"><button onclick="showAttachment('${req.adminAttachmentUrl}')" class="bg-green-100 text-green-800 px-4 py-2 rounded-lg font-medium hover:bg-green-200 transition shadow-sm flex items-center w-fit"><i class="fa-solid fa-image mr-2"></i> View Admin Approval Screenshot</button></div>`
                 : '';
 
+            let requesterAttachBtn = req.attachmentUrl 
+                ? `<div class="md:col-span-2 mt-2"><button onclick="showAttachment('${req.attachmentUrl}')" class="bg-blue-100 text-blue-800 px-4 py-2 rounded-lg font-medium hover:bg-blue-200 transition shadow-sm flex items-center w-fit"><i class="fa-solid fa-paperclip mr-2"></i> View Requester Attachment</button></div>`
+                : '';
+
             // Populate details
             document.getElementById('details-body').innerHTML = `
                 <div><span class="text-gray-500 block text-xs uppercase mb-1">Employee Name</span> <span class="font-medium text-gray-800 text-base">${req.employeeName}</span></div>
@@ -1119,6 +1125,7 @@
                 <div><span class="text-gray-500 block text-xs uppercase mb-1">Status</span> <span class="font-medium text-gray-800">${req.status}</span></div>
                 <div class="md:col-span-2"><span class="text-gray-500 block text-xs uppercase mb-1">Title / Venue</span> <span class="font-medium text-gray-800">${req.title}</span></div>
                 <div class="md:col-span-2"><span class="text-gray-500 block text-xs uppercase mb-1">Total Cost</span> <span class="font-bold text-blue-700 text-lg">₱${req.totalCost}</span></div>
+                ${requesterAttachBtn}
                 ${adminAttachBtn}
             `;
 
@@ -1127,12 +1134,25 @@
                 recName: '', recDate: '', valName: '', valDate: '', appName: '', appDate: ''
             };
             
+            // Format dates so HTML <input type="date"> can actually read them!
+            const formatDate = (dateStr) => {
+                if (!dateStr) return '';
+                try {
+                    const d = new Date(dateStr);
+                    if (isNaN(d.getTime())) return dateStr;
+                    const year = d.getFullYear();
+                    const month = String(d.getMonth() + 1).padStart(2, '0');
+                    const day = String(d.getDate()).padStart(2, '0');
+                    return `${year}-${month}-${day}`;
+                } catch(e) { return ''; }
+            };
+            
             document.getElementById('sig-rec-name').value = sigs.recName;
-            document.getElementById('sig-rec-date').value = sigs.recDate;
+            document.getElementById('sig-rec-date').value = formatDate(sigs.recDate);
             document.getElementById('sig-val-name').value = sigs.valName;
-            document.getElementById('sig-val-date').value = sigs.valDate;
+            document.getElementById('sig-val-date').value = formatDate(sigs.valDate);
             document.getElementById('sig-app-name').value = sigs.appName;
-            document.getElementById('sig-app-date').value = sigs.appDate;
+            document.getElementById('sig-app-date').value = formatDate(sigs.appDate);
 
             const inputs = document.querySelectorAll('.sig-input');
             const adminAttachSection = document.getElementById('details-admin-attach');
@@ -1233,7 +1253,9 @@
 
         document.getElementById('image-modal-close').addEventListener('click', () => {
             imageModal.classList.add('hidden');
-            document.getElementById('image-modal-img').src = '';
+            const imgEl = document.getElementById('image-modal-img');
+            imgEl.src = '';
+            imgEl.classList.add('hidden'); // RE-HIDE FOR NEXT TIME
             document.getElementById('image-modal-iframe').src = '';
         });
 
@@ -1241,7 +1263,9 @@
         imageModal.addEventListener('click', (e) => {
             if(e.target === imageModal) {
                  imageModal.classList.add('hidden');
-                 document.getElementById('image-modal-img').src = '';
+                 const imgEl = document.getElementById('image-modal-img');
+                 imgEl.src = '';
+                 imgEl.classList.add('hidden'); // RE-HIDE FOR NEXT TIME
                  document.getElementById('image-modal-iframe').src = '';
             }
         });
