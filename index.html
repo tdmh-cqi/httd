@@ -464,12 +464,31 @@
             updateTotal();
         }
 
-        loginForm.addEventListener('submit', (e) => {
+        loginForm.addEventListener('submit', async (e) => {
             e.preventDefault();
             const dept = document.getElementById('login-dept').value.trim();
             const pass = document.getElementById('login-password').value;
+            const btn = e.target.querySelector('button[type="submit"]');
             
             loginError.classList.add('hidden');
+            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i> Verifying...';
+            btn.disabled = true;
+
+            try {
+                // Fetch latest users and requests from cloud Database
+                const res = await fetch(GAS_URL + '?action=get');
+                const json = await res.json();
+                
+                if (json.success) {
+                    requests = json.data || [];
+                    if (json.users) {
+                        // Merge default admin password with cloud users
+                        registeredUsers = { 'admin': ADMIN_PASSWORD, ...json.users };
+                    }
+                }
+            } catch (err) {
+                console.warn("Cloud connection failed. Using local memory.", err);
+            }
 
             if (registeredUsers.hasOwnProperty(dept) && registeredUsers[dept] === pass) {
                 if (dept.toLowerCase() === 'admin') {
@@ -485,6 +504,9 @@
                 loginError.textContent = 'Invalid Department/Username or Password.';
                 loginError.classList.remove('hidden');
             }
+            
+            btn.textContent = 'Login';
+            btn.disabled = false;
         });
 
         document.getElementById('logout-btn').addEventListener('click', () => {
@@ -502,21 +524,6 @@
             
             // Show actions column for both Admin and Requester so requesters can view status
             document.getElementById('th-actions').classList.remove('hidden');
-
-            // Show loading state for requests
-            document.getElementById('list-count').textContent = 'Loading data...';
-            requestsTbody.innerHTML = '<tr><td colspan="8" class="text-center py-8 text-gray-500"><i class="fa-solid fa-spinner fa-spin text-2xl mb-3 block"></i><p>Loading data from cloud...</p></td></tr>';
-
-            // Fetch data from Google Apps Script
-            try {
-                const res = await fetch(GAS_URL + '?action=get');
-                const json = await res.json();
-                if(json.success && json.data) {
-                    requests = json.data;
-                }
-            } catch(e) {
-                console.warn("Failed to load from cloud, using local memory.", e);
-            }
 
             if (currentUserRole === 'admin') {
                 tabNew.classList.add('hidden');
@@ -813,11 +820,12 @@
         };
 
         // User Management Functions
-        document.getElementById('add-user-form').addEventListener('submit', (e) => {
+        document.getElementById('add-user-form').addEventListener('submit', async (e) => {
             e.preventDefault();
             const deptName = document.getElementById('new-dept-name').value.trim();
             const pass = document.getElementById('new-dept-pass').value;
             const errorDiv = document.getElementById('add-user-error');
+            const btn = e.target.querySelector('button[type="submit"]');
 
             errorDiv.classList.add('hidden');
 
@@ -833,7 +841,27 @@
                 return;
             }
 
+            // Save locally for immediate UI update
             registeredUsers[deptName] = pass;
+            
+            // Save to Cloud Google Sheet
+            const originalText = btn.textContent;
+            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i> Adding...';
+            btn.disabled = true;
+            
+            try {
+                await fetch(GAS_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                    body: JSON.stringify({ action: 'addUser', department: deptName, password: pass })
+                });
+            } catch (err) {
+                console.error("Cloud user save failed", err);
+            }
+            
+            btn.textContent = originalText;
+            btn.disabled = false;
+
             e.target.reset();
             renderUsers();
             showModal('Success', `${deptName} added successfully.`);
@@ -871,10 +899,22 @@
             }
         }
 
-        window.deleteUser = function(deptName) {
+        window.deleteUser = async function(deptName) {
             if (confirm(`Are you sure you want to remove access for the ${deptName} department?`)) {
                 delete registeredUsers[deptName];
                 renderUsers();
+                
+                // Cloud Sync Remove
+                try {
+                    await fetch(GAS_URL, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                        body: JSON.stringify({ action: 'deleteUser', department: deptName })
+                    });
+                } catch(e) {
+                    console.error("Cloud user delete failed", e);
+                }
+                
                 showModal('Removed', `${deptName} has been removed.`);
             }
         };
