@@ -32,6 +32,11 @@
                 <div id="login-error" class="hidden text-red-500 text-sm p-3 bg-red-50 rounded-lg"></div>
                 <button type="submit" class="w-full bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-blue-700 transition duration-200">Login</button>
                 <p class="text-xs text-gray-400 text-center mt-4">Note: For requesting departments, just enter your department name. Admin requires password.</p>
+                
+                <!-- NEW: Database Connection Status -->
+                <div id="db-status" class="text-xs font-medium text-center mt-4 text-gray-500 flex items-center justify-center">
+                    <i class="fa-solid fa-circle-notch fa-spin mr-2"></i> Connecting to Cloud Database...
+                </div>
             </form>
         </div>
     </div>
@@ -44,6 +49,9 @@
                         <span class="font-bold text-xl tracking-tight">TDMH HTDD Portal</span>
                     </div>
                     <div class="flex items-center space-x-4">
+                        <button id="sync-btn" class="flex items-center text-sm bg-blue-700 hover:bg-blue-600 px-3 py-1 rounded-full transition shadow-sm" title="Sync with Cloud">
+                            <i class="fa-solid fa-rotate mr-2"></i> Sync
+                        </button>
                         <div id="user-info-badge" class="flex items-center text-sm bg-blue-800 px-3 py-1 rounded-full">
                             <i class="fa-solid fa-user mr-2"></i>
                             <span id="current-user-display">User</span>
@@ -429,10 +437,12 @@
 
     <script>
         const ADMIN_PASSWORD = 'TDMHHTDD2026';
-        const GAS_URL = 'https://script.google.com/macros/s/AKfycbynyMrPMZDh6ZfN3JVXcy5jEenIppdfBqavvCQCgsPljWeBktagn-DdJr92ufCXJIPQ/exec';
+        
+        // IMPORTANT: Make sure this URL matches your LATEST Google Apps Script deployment!
+        const GAS_URL = 'https://script.google.com/macros/s/AKfycbz9tQnRh65NycvfMOn9QmLn1nTLUNMG6AR7gTmF_EAf5SFFHpH2U3ZOW_EJZO8Q765X/exec';
         
         let requests = [];
-        let currentUserRole = null; // 'requester' or 'admin'
+        let currentUserRole = null; 
         let currentUserName = '';
 
         // Initial setup for users
@@ -458,10 +468,42 @@
         const modal = document.getElementById('custom-modal');
         const imageModal = document.getElementById('image-modal');
 
+        // Fetch Data from Cloud
+        async function fetchCloudData() {
+            try {
+                const res = await fetch(GAS_URL + '?action=get', {
+                    method: 'GET',
+                    redirect: 'follow'
+                });
+                
+                const text = await res.text(); // Get raw text first to prevent JSON parse errors
+                
+                try {
+                    const json = JSON.parse(text);
+                    if (json.success) {
+                        requests = json.data || [];
+                        if (json.users) {
+                            registeredUsers = { 'admin': ADMIN_PASSWORD, ...json.users };
+                        }
+                        document.getElementById('db-status').innerHTML = '<i class="fa-solid fa-cloud-check text-green-600 mr-1"></i> <span class="text-green-700">Database Connected Successfully</span>';
+                        return true;
+                    }
+                } catch (parseError) {
+                    console.error("Failed to parse JSON. Google returned:", text);
+                    throw new Error("Google Apps Script returned an HTML error page instead of data. Check your deployment settings.");
+                }
+            } catch (err) {
+                console.warn("Cloud connection failed.", err);
+                document.getElementById('db-status').innerHTML = '<i class="fa-solid fa-triangle-exclamation text-red-500 mr-1"></i> <span class="text-red-600">Database Disconnected. Check GAS_URL & Settings.</span>';
+                return false;
+            }
+        }
+
         // Initialize state
         function init() {
             document.getElementById('req-date-app').valueAsDate = new Date();
             updateTotal();
+            fetchCloudData(); // Fetch users immediately on page load
         }
 
         loginForm.addEventListener('submit', async (e) => {
@@ -474,21 +516,8 @@
             btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i> Verifying...';
             btn.disabled = true;
 
-            try {
-                // Fetch latest users and requests from cloud Database
-                const res = await fetch(GAS_URL + '?action=get');
-                const json = await res.json();
-                
-                if (json.success) {
-                    requests = json.data || [];
-                    if (json.users) {
-                        // Merge default admin password with cloud users
-                        registeredUsers = { 'admin': ADMIN_PASSWORD, ...json.users };
-                    }
-                }
-            } catch (err) {
-                console.warn("Cloud connection failed. Using local memory.", err);
-            }
+            // Ensure we have the latest users before checking credentials
+            await fetchCloudData(); 
 
             if (registeredUsers.hasOwnProperty(dept) && registeredUsers[dept] === pass) {
                 if (dept.toLowerCase() === 'admin') {
@@ -515,6 +544,45 @@
             document.getElementById('login-form').reset();
             appView.classList.add('hidden');
             loginView.classList.remove('hidden');
+        });
+
+        document.getElementById('sync-btn').addEventListener('click', async (e) => {
+            const btn = e.currentTarget;
+            const icon = btn.querySelector('i');
+            icon.classList.add('fa-spin'); // Add spinning animation to icon
+            btn.disabled = true;
+
+            try {
+                const res = await fetch(GAS_URL + '?action=get', {
+                    method: 'GET',
+                    redirect: 'follow'
+                });
+                
+                const text = await res.text();
+                const json = JSON.parse(text);
+                
+                if (json.success) {
+                    requests = json.data || [];
+                    if (json.users) {
+                        registeredUsers = { 'admin': ADMIN_PASSWORD, ...json.users };
+                    }
+                    
+                    // Refresh current visible tab
+                    if (!viewList.classList.contains('hidden')) renderRequests();
+                    if (!viewReport.classList.contains('hidden')) updateReport();
+                    if (!viewUsers.classList.contains('hidden')) renderUsers();
+                    
+                    showModal('Sync Complete', 'Latest data has been fetched from the cloud.');
+                } else {
+                    showModal('Sync Error', 'Failed to fetch data: ' + (json.error || 'Unknown error'));
+                }
+            } catch (err) {
+                console.error("Cloud sync failed", err);
+                showModal('Connection Error', 'Could not connect. Google is blocking the request. Please check your Web App deployment settings.');
+            } finally {
+                icon.classList.remove('fa-spin'); // Stop animation
+                btn.disabled = false;
+            }
         });
 
         async function showApp() {
@@ -805,7 +873,6 @@
             if (index !== -1) {
                 requests[index].status = newStatus;
                 renderRequests();
-                // Update report data if we are currently viewing it
                 if (!viewReport.classList.contains('hidden')) {
                     updateReport();
                 }
@@ -813,6 +880,7 @@
                 // Cloud Sync
                 fetch(GAS_URL, {
                     method: 'POST',
+                    redirect: 'follow',
                     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
                     body: JSON.stringify({ action: 'updateStatus', id: id, status: newStatus })
                 }).catch(e => console.error(e));
@@ -840,32 +908,33 @@
                 errorDiv.classList.remove('hidden');
                 return;
             }
-
-            // Save locally for immediate UI update
-            registeredUsers[deptName] = pass;
             
-            // Save to Cloud Google Sheet
+            // Save to Cloud Google Sheet FIRST
             const originalText = btn.textContent;
-            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i> Adding...';
+            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i> Saving to Cloud...';
             btn.disabled = true;
             
             try {
-                await fetch(GAS_URL, {
+                const response = await fetch(GAS_URL, {
                     method: 'POST',
                     redirect: 'follow',
                     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
                     body: JSON.stringify({ action: 'addUser', department: deptName, password: pass })
                 });
+                
+                // Re-fetch from cloud to confirm it saved
+                await fetchCloudData();
+                renderUsers();
+                showModal('Success', `${deptName} added securely to the database.`);
+                e.target.reset();
             } catch (err) {
                 console.error("Cloud user save failed", err);
+                errorDiv.textContent = "Failed to save to database. Please check connection.";
+                errorDiv.classList.remove('hidden');
             }
             
             btn.textContent = originalText;
             btn.disabled = false;
-
-            e.target.reset();
-            renderUsers();
-            showModal('Success', `${deptName} added successfully.`);
         });
 
         function renderUsers() {
@@ -902,8 +971,6 @@
 
         window.deleteUser = async function(deptName) {
             if (confirm(`Are you sure you want to remove access for the ${deptName} department?`)) {
-                delete registeredUsers[deptName];
-                renderUsers();
                 
                 // Cloud Sync Remove
                 try {
@@ -913,11 +980,15 @@
                         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
                         body: JSON.stringify({ action: 'deleteUser', department: deptName })
                     });
+                    
+                    // Sync locally after successful delete
+                    await fetchCloudData();
+                    renderUsers();
+                    showModal('Removed', `${deptName} has been removed from the database.`);
                 } catch(e) {
                     console.error("Cloud user delete failed", e);
+                    alert("Failed to delete from cloud database.");
                 }
-                
-                showModal('Removed', `${deptName} has been removed.`);
             }
         };
 
