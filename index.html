@@ -583,6 +583,32 @@
 
         tabNew.addEventListener('click', () => switchTab('new'));
         tabList.addEventListener('click', () => switchTab('list'));
+        tabReport.addEventListener('click', () => switchTab('report'));
+        tabUsers.addEventListener('click', () => switchTab('users'));
+
+        function updateTotal() {
+            const reg = parseFloat(document.getElementById('cost-reg').value) || 0;
+            const travel = parseFloat(document.getElementById('cost-travel').value) || 0;
+            const food = parseFloat(document.getElementById('cost-food').value) || 0;
+            const acc = parseFloat(document.getElementById('cost-acc').value) || 0;
+            const total = reg + travel + food + acc;
+            document.getElementById('total-amount').textContent = total.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+            return total;
+        }
+
+        const costInputs = document.querySelectorAll('.cost-input');
+        costInputs.forEach(input => {
+            input.addEventListener('input', updateTotal);
+        });
+
+        let currentAttachmentUrl = null;
+        document.getElementById('req-attachment').addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                currentAttachmentUrl = URL.createObjectURL(file);
+                document.getElementById('attachment-status').classList.remove('hidden');
+            } else {
+                currentAttachmentUrl = null;
                 document.getElementById('attachment-status').classList.add('hidden');
             }
         });
