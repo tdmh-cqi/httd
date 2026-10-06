@@ -222,7 +222,8 @@
                             <span id="attachment-status" class="hidden mt-2 text-xs text-green-600 font-medium flex items-center"><i class="fa-solid fa-circle-check mr-1"></i> File attached</span>
                         </div>
 
-                        <div class="flex justify-end pt-4 border-t border-gray-200">
+                        <div class="flex justify-end space-x-4 pt-4 border-t border-gray-200">
+                            <button type="button" id="btn-erase" class="bg-gray-200 text-gray-700 font-semibold py-3 px-6 rounded-lg hover:bg-gray-300 transition shadow-sm">Erase Form</button>
                             <button type="submit" class="bg-blue-600 text-white font-semibold py-3 px-8 rounded-lg hover:bg-blue-700 transition shadow-sm">Submit Request</button>
                         </div>
                     </form>
@@ -370,11 +371,16 @@
         </div>
     </div>
 
-    <!-- Image Preview Modal -->
-    <div id="image-modal" class="hidden fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50 p-4">
-        <div class="relative max-w-4xl w-full">
+    <!-- Image/Document Preview Modal -->
+    <div id="image-modal" class="hidden fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center p-4" style="z-index: 60;">
+        <div class="relative max-w-4xl w-full h-[85vh] flex flex-col justify-center">
             <button id="image-modal-close" class="absolute -top-10 right-0 text-white text-2xl hover:text-gray-300"><i class="fa-solid fa-xmark"></i></button>
-            <img id="image-modal-img" src="" alt="Attachment Preview" class="max-w-full max-h-[80vh] mx-auto rounded-lg shadow-2xl object-contain bg-white">
+            
+            <!-- For local image previews -->
+            <img id="image-modal-img" src="" alt="Attachment Preview" class="hidden max-w-full max-h-full mx-auto rounded-lg shadow-2xl object-contain bg-white">
+            
+            <!-- For Google Drive cloud files (PDFs and Images) -->
+            <iframe id="image-modal-iframe" src="" class="hidden w-full h-full bg-white rounded-lg shadow-2xl border-0"></iframe>
         </div>
     </div>
 
@@ -676,6 +682,18 @@
             input.addEventListener('input', updateTotal);
         });
 
+        document.getElementById('btn-erase').addEventListener('click', () => {
+            if (confirm("Are you sure you want to erase all entries in this form?")) {
+                document.getElementById('request-form').reset();
+                document.getElementById('req-department').value = currentUserName;
+                document.getElementById('req-date-app').valueAsDate = new Date();
+                updateTotal();
+                currentAttachmentUrl = null;
+                currentAttachmentBase64 = null;
+                document.getElementById('attachment-status').classList.add('hidden');
+            }
+        });
+
         let currentAttachmentUrl = null;
         let currentAttachmentBase64 = null;
         document.getElementById('req-attachment').addEventListener('change', (e) => {
@@ -705,8 +723,18 @@
 
             const trainingType = document.querySelector('input[name="training-type"]:checked').value;
 
+            // Generate Sequential ID (e.g., 0001)
+            let newIdNum = 1;
+            const numericIds = requests
+                .map(r => parseInt(String(r.id).replace(/\D/g, ''), 10))
+                .filter(id => !isNaN(id) && id < 1000000); // Ignore old timestamp IDs
+            if (numericIds.length > 0) {
+                newIdNum = Math.max(...numericIds) + 1;
+            }
+            const formattedId = String(newIdNum).padStart(4, '0');
+
             const newRequest = {
-                id: Date.now().toString(),
+                id: formattedId,
                 type: trainingType,
                 employeeName: document.getElementById('req-emp-name').value,
                 dateApp: document.getElementById('req-date-app').value,
@@ -735,13 +763,21 @@
             
             // Sync to Google Apps Script
             try {
-                await fetch(GAS_URL, {
+                const response = await fetch(GAS_URL, {
                     method: 'POST',
+                    redirect: 'follow',
                     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
                     body: JSON.stringify({ action: 'add', data: newRequest })
                 });
+                
+                const result = await response.json();
+                if (!result.success) {
+                    console.error("Backend Error:", result.error);
+                    alert("Warning: Failed to save to Google Sheet. Check Apps Script code.");
+                }
             } catch (err) {
                 console.error("Cloud sync failed", err);
+                alert("Connection error while saving to Google Cloud.");
             }
 
             requests.unshift(newRequest); // Add to beginning
@@ -807,8 +843,10 @@
                     ? `<button onclick="showAttachment('${req.adminAttachmentUrl}')" class="ml-2 text-green-600 hover:text-green-800" title="View Approval Screenshot"><i class="fa-solid fa-file-signature"></i></button>`
                     : '';
 
+                let displayId = String(req.id).padStart(4, '0');
+
                 let html = `
-                    <td class="px-6 py-4 font-medium text-gray-900">REQ-${req.id.toString().slice(-4)}</td>
+                    <td class="px-6 py-4 font-medium text-gray-900">REQ-${displayId}</td>
                     <td class="px-6 py-4">
                         <div class="font-medium text-gray-800">${req.employeeName}</div>
                         <div class="text-xs text-gray-500">${req.position}</div>
@@ -1023,8 +1061,14 @@
         }
 
         window.showAttachment = function(url) {
-            document.getElementById('image-modal-img').src = url;
-            imageModal.classList.remove('hidden');
+            if (url && url.includes('drive.google.com')) {
+                // Open Google Drive links in a new tab to bypass Google's image blocking
+                window.open(url, '_blank');
+            } else {
+                // Show local preview in modal
+                document.getElementById('image-modal-img').src = url;
+                imageModal.classList.remove('hidden');
+            }
         };
 
         // --- Details & Approval Modal Logic ---
@@ -1190,12 +1234,15 @@
         document.getElementById('image-modal-close').addEventListener('click', () => {
             imageModal.classList.add('hidden');
             document.getElementById('image-modal-img').src = '';
+            document.getElementById('image-modal-iframe').src = '';
         });
 
         // Close modal on background click
         imageModal.addEventListener('click', (e) => {
             if(e.target === imageModal) {
                  imageModal.classList.add('hidden');
+                 document.getElementById('image-modal-img').src = '';
+                 document.getElementById('image-modal-iframe').src = '';
             }
         });
 
