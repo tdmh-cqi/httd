@@ -602,13 +602,20 @@
         });
 
         let currentAttachmentUrl = null;
+        let currentAttachmentBase64 = null;
         document.getElementById('req-attachment').addEventListener('change', (e) => {
             const file = e.target.files[0];
             if (file) {
-                currentAttachmentUrl = URL.createObjectURL(file);
+                currentAttachmentUrl = URL.createObjectURL(file); // For local preview
+                const reader = new FileReader();
+                reader.onload = function(event) {
+                    currentAttachmentBase64 = event.target.result; // For backend cloud save
+                };
+                reader.readAsDataURL(file);
                 document.getElementById('attachment-status').classList.remove('hidden');
             } else {
                 currentAttachmentUrl = null;
+                currentAttachmentBase64 = null;
                 document.getElementById('attachment-status').classList.add('hidden');
             }
         });
@@ -642,6 +649,7 @@
                 status: 'Pending',
                 submittedBy: currentUserName,
                 attachmentUrl: currentAttachmentUrl,
+                attachmentBase64: currentAttachmentBase64,
                 applicantSig: document.getElementById('req-applicant-sig').value,
                 signatures: {
                     recName: '', recDate: '',
@@ -669,6 +677,7 @@
             document.getElementById('req-date-app').valueAsDate = new Date();
             updateTotal();
             currentAttachmentUrl = null;
+            currentAttachmentBase64 = null;
             document.getElementById('attachment-status').classList.add('hidden');
             
             submitBtn.textContent = originalText;
@@ -785,7 +794,7 @@
         }
 
         window.updateStatus = function(id, newStatus) {
-            const index = requests.findIndex(r => r.id == id);
+            const index = requests.findIndex(r => String(r.id) === String(id));
             if (index !== -1) {
                 requests[index].status = newStatus;
                 renderRequests();
@@ -908,21 +917,28 @@
         // --- Details & Approval Modal Logic ---
         let currentDetailsReqId = null;
         let currentTempAdminAttachUrl = null;
+        let currentTempAdminAttachBase64 = null;
         const detailsModal = document.getElementById('request-details-modal');
 
         document.getElementById('sig-attach-input').addEventListener('change', (e) => {
             const file = e.target.files[0];
             if (file) {
                 currentTempAdminAttachUrl = URL.createObjectURL(file);
+                const reader = new FileReader();
+                reader.onload = function(event) {
+                    currentTempAdminAttachBase64 = event.target.result;
+                };
+                reader.readAsDataURL(file);
                 document.getElementById('sig-attach-status').classList.remove('hidden');
             } else {
                 currentTempAdminAttachUrl = null;
+                currentTempAdminAttachBase64 = null;
                 document.getElementById('sig-attach-status').classList.add('hidden');
             }
         });
 
         window.openDetailsModal = function(id) {
-            const req = requests.find(r => r.id == id);
+            const req = requests.find(r => String(r.id) === String(id));
             if (!req) {
                 console.error("Request not found:", id);
                 return;
@@ -930,6 +946,7 @@
             
             currentDetailsReqId = id;
             currentTempAdminAttachUrl = req.adminAttachmentUrl || null;
+            currentTempAdminAttachBase64 = null;
             
             let adminAttachBtn = req.adminAttachmentUrl 
                 ? `<div class="md:col-span-2 mt-4 pt-4 border-t border-gray-200"><button onclick="showAttachment('${req.adminAttachmentUrl}')" class="bg-green-100 text-green-800 px-4 py-2 rounded-lg font-medium hover:bg-green-200 transition shadow-sm flex items-center w-fit"><i class="fa-solid fa-image mr-2"></i> View Admin Approval Screenshot</button></div>`
@@ -968,6 +985,7 @@
             // Reset attachment UI
             document.getElementById('sig-attach-input').value = '';
             document.getElementById('sig-attach-status').classList.add('hidden');
+            currentTempAdminAttachBase64 = null;
 
             if (currentUserRole === 'admin' && req.status === 'Pending') {
                 // Editable for Admin
@@ -1012,6 +1030,9 @@
 
             if (currentTempAdminAttachUrl) {
                 req.adminAttachmentUrl = currentTempAdminAttachUrl;
+            }
+            if (currentTempAdminAttachBase64) {
+                req.adminAttachmentBase64 = currentTempAdminAttachBase64;
             }
 
             if (changeStatus) {
